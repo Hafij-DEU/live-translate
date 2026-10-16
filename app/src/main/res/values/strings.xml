@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ScreenLingo</string>
+    <string name="tile_label">Translate screen</string>
+    <string name="channel_name">Screen translation</string>
+    <string name="notification_text">Tap the bubble to translate what is on screen</string>
+    <string name="action_translate">Translate</string>
+    <string name="action_stop">Stop</string>
+    <string name="label_source">Translate from</string>
+    <string name="label_target">Translate to</string>
+    <string name="label_script">Text recognition script</string>
+    <string name="start_bubble">Start floating bubble</string>
+    <string name="stop_bubble">Stop bubble</string>
+    <string name="download_models">Download offline language packs</string>
+    <string name="status_on">Bubble is on. Tap it on any screen to translate. Long-press it to stop.</string>
+    <string name="status_off">Bubble is off.</string>
+    <string name="need_overlay">Allow ScreenLingo to display over other apps, then tap Start again.</string>
+    <string name="capture_denied">Screen capture permission was not granted.</string>
+    <string name="no_text">No text found on screen</string>
+    <string name="no_language">Couldn\'t detect the language. Pick it under \"Translate from\".</string>
+    <string name="no_frame">No screen image yet. Try again.</string>
+    <string name="working">Translating… (the first use of a language downloads its pack)</string>
+    <string name="copied">Translation copied</string>
+    <string name="stopped">ScreenLingo stopped</string>
+    <string name="downloading">Downloading language packs…</string>
+    <string name="downloaded">Offline language packs ready.</string>
+    <string name="download_failed">Download failed: %1$s</string>
+    <string name="result_hint">Tap to close · Long-press to copy</string>
+    <string name="help">Works offline after the language packs are downloaded. Text recognition supports Latin, Chinese, Devanagari, Japanese and Korean scripts.</string>
+</resources>
