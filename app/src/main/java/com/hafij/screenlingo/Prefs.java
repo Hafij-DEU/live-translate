@@ -10,6 +10,7 @@ import java.util.Locale;
 /** User settings: language pair, OCR script and bubble position. */
 final class Prefs {
     static final String AUTO = "auto";
+    static final String DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
 
     private Prefs() {}
 
@@ -40,6 +41,35 @@ final class Prefs {
 
     static void setScript(Context c, String script) {
         store(c).edit().putString("script", script).apply();
+    }
+
+    static String engine(Context c) {
+        return store(c).getString("engine", OnlineTranslator.OFFLINE);
+    }
+
+    static void setEngine(Context c, String engine) {
+        store(c).edit().putString("engine", engine).apply();
+    }
+
+    static String deeplKey(Context c) {
+        return store(c).getString("deepl_key", "").trim();
+    }
+
+    static String geminiKey(Context c) {
+        return store(c).getString("gemini_key", "").trim();
+    }
+
+    static String geminiModel(Context c) {
+        String model = store(c).getString("gemini_model", "").trim();
+        return model.isEmpty() ? DEFAULT_GEMINI_MODEL : model;
+    }
+
+    static void setKeys(Context c, String deeplKey, String geminiKey, String geminiModel) {
+        store(c).edit()
+                .putString("deepl_key", deeplKey.trim())
+                .putString("gemini_key", geminiKey.trim())
+                .putString("gemini_model", geminiModel.trim())
+                .apply();
     }
 
     static int bubbleX(Context c, int fallback) {

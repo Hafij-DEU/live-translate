@@ -26,5 +26,14 @@
     <string name="downloaded">Offline language packs ready.</string>
     <string name="download_failed">Download failed: %1$s</string>
     <string name="result_hint">Tap to close · Long-press to copy</string>
-    <string name="help">Works offline after the language packs are downloaded. Text recognition supports Latin, Chinese, Devanagari, Japanese and Korean scripts.</string>
+    <string name="help">Offline mode never sends anything off the phone and works without internet once the language packs are downloaded. Text recognition supports Latin, Chinese, Devanagari, Japanese and Korean scripts.</string>
+    <string name="label_engine">Translation engine</string>
+    <string name="hint_deepl_key">DeepL API key</string>
+    <string name="hint_gemini_key">Gemini API key</string>
+    <string name="hint_gemini_model">Gemini model (default gemini-flash-latest)</string>
+    <string name="note_offline">Translates on the phone. Fast and private, but less accurate.</string>
+    <string name="note_google">Sends the screen\'s text to Google Translate. No key needed; this unofficial endpoint can stop working or be rate-limited.</string>
+    <string name="note_deepl">Sends the screen\'s text to DeepL. Get a free key (500,000 characters a month) at deepl.com/pro-api.</string>
+    <string name="note_gemini">Sends the screen\'s text to Google Gemini, which translates with context and fixes OCR mistakes. Get a free key at aistudio.google.com/apikey.</string>
+    <string name="online_failed">Online translation failed (%1$s). Used offline instead.</string>
 </resources>

@@ -26,6 +26,7 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -35,6 +36,7 @@ import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
@@ -61,6 +63,7 @@ public class TranslateService extends Service {
     private static final String CHANNEL = "capture";
     private static final int NOTIFICATION_ID = 1;
     private static final long HIDE_BUBBLE_MS = 250;
+    private static final String TAG = "ScreenLingo";
 
     private static WeakReference<TranslateService> current = new WeakReference<>(null);
 
@@ -258,35 +261,51 @@ public class TranslateService extends Service {
     }
 
     private void translate(Text text, Bitmap screenshot) {
-        List<Text.TextBlock> blocks = new ArrayList<>();
+        String script = Prefs.script(this);
+        boolean spaced = !Ocr.CHINESE.equals(script) && !Ocr.JAPANESE.equals(script);
+        List<Segments.Segment> segments = Segments.from(text, spaced);
         List<Integer> backgrounds = new ArrayList<>();
-        for (Text.TextBlock block : text.getTextBlocks()) {
-            if (block.getBoundingBox() != null && !block.getText().trim().isEmpty()) {
-                blocks.add(block);
-                backgrounds.add(backgroundAround(screenshot, block.getBoundingBox()));
-            }
+        List<String> texts = new ArrayList<>();
+        for (Segments.Segment segment : segments) {
+            backgrounds.add(backgroundAround(screenshot, segment.box));
+            texts.add(segment.text);
         }
         screenshot.recycle();
-        if (blocks.isEmpty()) {
+        if (segments.isEmpty()) {
             fail(getString(R.string.no_text));
             return;
         }
+        String engineId = Prefs.engine(this);
+        String source = Prefs.source(this);
         String target = Prefs.target(this);
-        List<String> spaced = new ArrayList<>();
-        for (Text.TextBlock block : blocks) spaced.add(joinLines(block, " "));
-        engine.resolveSource(Prefs.source(this), spaced)
-                .onSuccessTask(source -> {
-                    if (source == null) {
-                        return Tasks.forException(new IllegalStateException(getString(R.string.no_language)));
-                    }
-                    List<String> parts = new ArrayList<>();
-                    String separator = Languages.joinsWithoutSpaces(source) ? "" : " ";
-                    for (Text.TextBlock block : blocks) parts.add(joinLines(block, separator));
-                    if (source.equals(target)) return Tasks.forResult(parts);
-                    return engine.translate(source, target, parts);
-                })
-                .addOnSuccessListener(translated -> showResult(blocks, backgrounds, translated))
+        Task<List<String>> work;
+        if (OnlineTranslator.OFFLINE.equals(engineId)) {
+            work = translateOffline(source, target, texts);
+        } else {
+            // Detect once for the whole screen: per-block detection online misreads short labels.
+            work = engine.resolveSource(source, texts)
+                    .continueWithTask(detected -> OnlineTranslator.translate(this, engineId,
+                            detected.isSuccessful() ? detected.getResult() : null, target, texts))
+                    .continueWithTask(task -> {
+                        if (task.isSuccessful()) return task;
+                        Exception e = task.getException();
+                        Log.w(TAG, "online translation failed, using offline", e);
+                        toast(getString(R.string.online_failed, e != null ? e.getMessage() : ""));
+                        return translateOffline(source, target, texts);
+                    });
+        }
+        work.addOnSuccessListener(translated -> showResult(segments, backgrounds, translated))
                 .addOnFailureListener(e -> fail(e.getMessage()));
+    }
+
+    private Task<List<String>> translateOffline(String source, String target, List<String> texts) {
+        return engine.resolveSource(source, texts).onSuccessTask(resolved -> {
+            if (resolved == null) {
+                return Tasks.forException(new IllegalStateException(getString(R.string.no_language)));
+            }
+            if (resolved.equals(target)) return Tasks.forResult(texts);
+            return engine.translate(resolved, target, texts);
+        });
     }
 
     /** The most common colour just outside the box, which is the surface the text sits on. */
@@ -316,24 +335,14 @@ public class TranslateService extends Service {
         return best;
     }
 
-    /** OCR splits paragraphs into visual lines; rejoin them so the translator sees sentences. */
-    private static String joinLines(Text.TextBlock block, String separator) {
-        StringBuilder out = new StringBuilder();
-        for (Text.Line line : block.getLines()) {
-            if (out.length() > 0) out.append(separator);
-            out.append(line.getText().trim());
-        }
-        return out.toString();
-    }
-
-    private void showResult(List<Text.TextBlock> blocks, List<Integer> backgrounds, List<String> translated) {
+    private void showResult(List<Segments.Segment> segments, List<Integer> backgrounds, List<String> translated) {
         cancelSlowHint();
         busy = false;
         if (projection == null) return;
         List<ResultView.Item> items = new ArrayList<>();
         StringBuilder all = new StringBuilder();
-        for (int i = 0; i < blocks.size(); i++) {
-            items.add(new ResultView.Item(blocks.get(i).getBoundingBox(), translated.get(i), backgrounds.get(i)));
+        for (int i = 0; i < segments.size(); i++) {
+            items.add(new ResultView.Item(segments.get(i).box, translated.get(i), backgrounds.get(i)));
             if (all.length() > 0) all.append("\n\n");
             all.append(translated.get(i));
         }

@@ -25,6 +25,32 @@
         <TextView style="@style/Label" android:text="@string/label_script" />
         <Spinner android:id="@+id/script" style="@style/Picker" />
 
+        <TextView style="@style/Label" android:text="@string/label_engine" />
+        <Spinner android:id="@+id/engine" style="@style/Picker" />
+
+        <EditText
+            android:id="@+id/deepl_key"
+            style="@style/KeyField"
+            android:hint="@string/hint_deepl_key" />
+
+        <EditText
+            android:id="@+id/gemini_key"
+            style="@style/KeyField"
+            android:hint="@string/hint_gemini_key" />
+
+        <EditText
+            android:id="@+id/gemini_model"
+            style="@style/KeyField"
+            android:hint="@string/hint_gemini_model"
+            android:inputType="text|textNoSuggestions" />
+
+        <TextView
+            android:id="@+id/engine_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:alpha="0.7" />
+
         <Button
             android:id="@+id/start"
             android:layout_width="match_parent"

@@ -32,11 +32,6 @@ final class Languages {
         return name.substring(0, 1).toUpperCase(Locale.getDefault()) + name.substring(1);
     }
 
-    /** Languages written without spaces between words, so OCR lines join without a separator. */
-    static boolean joinsWithoutSpaces(String code) {
-        return "zh".equals(code) || "ja".equals(code) || "th".equals(code);
-    }
-
     /** The OCR script that reads this language, or null when none of them can. */
     static String scriptFor(String code) {
         switch (code) {

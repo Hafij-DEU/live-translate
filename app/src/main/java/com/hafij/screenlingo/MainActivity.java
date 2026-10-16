@@ -7,6 +7,7 @@ import android.provider.Settings;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
 
@@ -25,6 +26,10 @@ import java.util.function.IntConsumer;
 public class MainActivity extends Activity {
     private TextView status;
     private Spinner script;
+    private EditText deeplKey;
+    private EditText geminiKey;
+    private EditText geminiModel;
+    private TextView engineNote;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -49,6 +54,19 @@ public class MainActivity extends Activity {
         bind(script, Ocr.NAMES, Ocr.indexOf(Prefs.script(this)),
                 i -> Prefs.setScript(this, Ocr.SCRIPTS[i]));
 
+        deeplKey = findViewById(R.id.deepl_key);
+        geminiKey = findViewById(R.id.gemini_key);
+        geminiModel = findViewById(R.id.gemini_model);
+        engineNote = findViewById(R.id.engine_note);
+        deeplKey.setText(Prefs.deeplKey(this));
+        geminiKey.setText(Prefs.geminiKey(this));
+        geminiModel.setText(Prefs.geminiModel(this));
+        bind(findViewById(R.id.engine), OnlineTranslator.NAMES, OnlineTranslator.indexOf(Prefs.engine(this)), i -> {
+            Prefs.setEngine(this, OnlineTranslator.ENGINES[i]);
+            showEngineFields(OnlineTranslator.ENGINES[i]);
+        });
+        showEngineFields(Prefs.engine(this));
+
         findViewById(R.id.start).setOnClickListener(v ->
                 startActivity(new Intent(this, ProjectionActivity.class)));
         findViewById(R.id.stop).setOnClickListener(v -> {
@@ -58,6 +76,33 @@ public class MainActivity extends Activity {
             status.postDelayed(this::updateStatus, 300);
         });
         findViewById(R.id.download).setOnClickListener(v -> downloadModels());
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Prefs.setKeys(this, deeplKey.getText().toString(), geminiKey.getText().toString(),
+                geminiModel.getText().toString());
+    }
+
+    private void showEngineFields(String engine) {
+        deeplKey.setVisibility(OnlineTranslator.DEEPL.equals(engine) ? View.VISIBLE : View.GONE);
+        boolean gemini = OnlineTranslator.GEMINI.equals(engine);
+        geminiKey.setVisibility(gemini ? View.VISIBLE : View.GONE);
+        geminiModel.setVisibility(gemini ? View.VISIBLE : View.GONE);
+        switch (engine) {
+            case OnlineTranslator.GOOGLE:
+                engineNote.setText(R.string.note_google);
+                break;
+            case OnlineTranslator.DEEPL:
+                engineNote.setText(R.string.note_deepl);
+                break;
+            case OnlineTranslator.GEMINI:
+                engineNote.setText(R.string.note_gemini);
+                break;
+            default:
+                engineNote.setText(R.string.note_offline);
+        }
     }
 
     @Override
