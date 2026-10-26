@@ -1,0 +1,10 @@
+# Privacy
+
+ScreenLingo has no ads, analytics, tracking or account.
+
+- **Screen capture stays on your device.** When you tap the bubble, the screen image is captured, read with on-device text recognition (Google ML Kit) and discarded. The image is never uploaded or saved.
+- **Offline engine (default).** Translation runs on the phone with ML Kit's on-device models. Nothing leaves the device. ML Kit downloads language packs from Google when you first use a language or tap "Download offline language packs".
+- **Online engines (optional).** Only if you choose DeepL or Gemini and enter your own API key, the *recognised text* (not the image) is sent to that provider, under its terms and privacy policy. Your key is stored only on your device.
+- API keys and settings are stored locally in the app's private storage.
+
+Questions: open an issue at https://github.com/Hafij-DEU/live-translate/issues

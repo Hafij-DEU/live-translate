@@ -44,7 +44,10 @@ final class Prefs {
     }
 
     static String engine(Context c) {
-        return store(c).getString("engine", OnlineTranslator.OFFLINE);
+        String engine = store(c).getString("engine", OnlineTranslator.OFFLINE);
+        // Engines removed in later versions (the old unofficial Google one) fall back to offline.
+        return OnlineTranslator.indexOf(engine) == 0 && !OnlineTranslator.OFFLINE.equals(engine)
+                ? OnlineTranslator.OFFLINE : engine;
     }
 
     static void setEngine(Context c, String engine) {

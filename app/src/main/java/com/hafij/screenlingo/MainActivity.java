@@ -1,9 +1,11 @@
 package com.hafij.screenlingo;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.util.Linkify;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -76,6 +78,39 @@ public class MainActivity extends Activity {
             status.postDelayed(this::updateStatus, 300);
         });
         findViewById(R.id.download).setOnClickListener(v -> downloadModels());
+        findViewById(R.id.about).setOnClickListener(v -> showAbout());
+    }
+
+    private void showAbout() {
+        String version = "";
+        try {
+            version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception ignored) {
+        }
+        TextView body = new TextView(this);
+        body.setText(getString(R.string.about_body));
+        body.setAutoLinkMask(Linkify.WEB_URLS);
+        body.setTextSize(15);
+        body.setPadding(64, 24, 64, 0);
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.app_name) + " " + getString(R.string.about_version, version))
+                .setView(body)
+                .setPositiveButton(android.R.string.ok, null)
+                .setNeutralButton(R.string.licenses, (d, w) -> showLicenses())
+                .show();
+    }
+
+    private void showLicenses() {
+        TextView body = new TextView(this);
+        body.setText(getString(R.string.licenses_body));
+        body.setAutoLinkMask(Linkify.WEB_URLS);
+        body.setTextSize(15);
+        body.setPadding(64, 24, 64, 0);
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.licenses)
+                .setView(body)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
     @Override
@@ -91,9 +126,6 @@ public class MainActivity extends Activity {
         geminiKey.setVisibility(gemini ? View.VISIBLE : View.GONE);
         geminiModel.setVisibility(gemini ? View.VISIBLE : View.GONE);
         switch (engine) {
-            case OnlineTranslator.GOOGLE:
-                engineNote.setText(R.string.note_google);
-                break;
             case OnlineTranslator.DEEPL:
                 engineNote.setText(R.string.note_deepl);
                 break;
