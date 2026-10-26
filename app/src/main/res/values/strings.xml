@@ -32,6 +32,7 @@
     <string name="hint_gemini_key">Gemini API key</string>
     <string name="hint_gemini_model">Gemini model (default gemini-flash-latest)</string>
     <string name="note_offline">Translates on the phone. Fast and private, but less accurate.</string>
+    <string name="note_google">Sends the screen\'s text to Google Translate. No key needed; this unofficial endpoint can stop working or be rate-limited.</string>
     <string name="note_deepl">Sends the screen\'s text to DeepL. Get a free key (500,000 characters a month) at deepl.com/pro-api.</string>
     <string name="note_gemini">Sends the screen\'s text to Google Gemini, which translates with context and fixes OCR mistakes. Get a free key at aistudio.google.com/apikey.</string>
     <string name="online_failed">Online translation failed (%1$s). Used offline instead.</string>
@@ -39,5 +40,5 @@
     <string name="about_version">Version %1$s</string>
     <string name="about_body">Developed by Md. Hafijur Rahman\n\nGitHub: https://github.com/Hafij-DEU/live-translate\nLicense: MIT (see LICENSE in the repository)\n\nThis app was generated with AI. Developer support may not be available.</string>
     <string name="licenses">Open-source licenses</string>
-    <string name="licenses_body">Google ML Kit (text recognition, translation, language identification): used under the ML Kit terms of service, https://developers.google.com/ml-kit/terms\n\nMaterial Icons \"translate\" glyph (app icon and bubble): Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0\n\nOptional online engines: DeepL API and Google Gemini API, used with your own key under each provider\'s terms.\n\nScreenLingo itself: MIT License, Copyright (c) Md. Hafijur Rahman.</string>
+    <string name="licenses_body">Google ML Kit (text recognition, translation, language identification): used under the ML Kit terms of service, https://developers.google.com/ml-kit/terms\n\nMaterial Icons \"translate\" glyph (app icon and bubble): Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0\n\nOptional online engines: Google Translate (unofficial web endpoint, may stop working at any time), and the DeepL and Google Gemini APIs with your own key, each under its provider\'s terms.\n\nScreenLingo itself: MIT License, Copyright (c) Md. Hafijur Rahman.</string>
 </resources>

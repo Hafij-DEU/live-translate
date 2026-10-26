@@ -126,6 +126,9 @@ public class MainActivity extends Activity {
         geminiKey.setVisibility(gemini ? View.VISIBLE : View.GONE);
         geminiModel.setVisibility(gemini ? View.VISIBLE : View.GONE);
         switch (engine) {
+            case OnlineTranslator.GOOGLE:
+                engineNote.setText(R.string.note_google);
+                break;
             case OnlineTranslator.DEEPL:
                 engineNote.setText(R.string.note_deepl);
                 break;

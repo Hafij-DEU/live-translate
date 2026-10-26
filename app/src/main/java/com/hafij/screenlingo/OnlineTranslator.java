@@ -26,23 +26,28 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Cloud translation engines (DeepL and Gemini, with the user's own API key). Each takes the screen's text segments in reading order and returns
+ * Cloud translation engines. Each takes the screen's text segments in reading order and returns
  * one translation per segment. A null source means "detect it".
  */
 final class OnlineTranslator {
     static final String OFFLINE = "offline";
+    static final String GOOGLE = "google";
     static final String DEEPL = "deepl";
     static final String GEMINI = "gemini";
 
-    static final String[] ENGINES = {OFFLINE, DEEPL, GEMINI};
+    static final String[] ENGINES = {OFFLINE, GOOGLE, DEEPL, GEMINI};
     static final String[] NAMES = {
             "Offline (ML Kit, private)",
+            "Google Translate (online, no key)",
             "DeepL (online, API key)",
             "Gemini AI (online, API key, most accurate)",
     };
 
     private static final ExecutorService NETWORK = Executors.newSingleThreadExecutor();
+    private static final int GOOGLE_CHUNK_CHARS = 4000;
     private static final int DEEPL_CHUNK_ITEMS = 50;
+    private static final String BROWSER_AGENT = "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 "
+            + "(KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36";
 
     private OnlineTranslator() {}
 
@@ -61,6 +66,9 @@ final class OnlineTranslator {
             try {
                 List<String> out;
                 switch (engine) {
+                    case GOOGLE:
+                        out = google(source, target, texts);
+                        break;
                     case DEEPL:
                         out = deepl(Prefs.deeplKey(app), source, target, texts);
                         break;
@@ -79,6 +87,38 @@ final class OnlineTranslator {
             }
         });
         return result.getTask();
+    }
+
+    // ---------------------------------------------------------------- Google (unofficial web endpoint)
+
+    private static List<String> google(String source, String target, List<String> texts)
+            throws IOException, JSONException {
+        // The Chrome-extension endpoint takes one q per segment and answers with one entry each;
+        // the older translate_a/single endpoint is captcha-walled on many networks.
+        String url = "https://clients5.google.com/translate_a/t?client=dict-chrome-ex"
+                + "&sl=" + encode(source == null ? "auto" : googleCode(source))
+                + "&tl=" + encode(googleCode(target));
+        List<String> out = new ArrayList<>();
+        for (List<String> chunk : chunkByChars(texts, GOOGLE_CHUNK_CHARS)) {
+            StringBuilder body = new StringBuilder();
+            for (String text : chunk) {
+                if (body.length() > 0) body.append('&');
+                body.append("q=").append(encode(text));
+            }
+            // The default Dalvik user agent is sent to a captcha page; a browser one is not.
+            JSONArray answers = new JSONArray(post(url, "application/x-www-form-urlencoded;charset=UTF-8",
+                    body.toString(), Collections.singletonMap("User-Agent", BROWSER_AGENT), 20_000));
+            for (int i = 0; i < answers.length(); i++) {
+                // With sl=auto each entry is [translation, detectedLanguage]; otherwise a plain string.
+                JSONArray pair = answers.optJSONArray(i);
+                out.add(pair != null ? pair.getString(0) : answers.getString(i));
+            }
+        }
+        return out;
+    }
+
+    private static String googleCode(String code) {
+        return "zh".equals(code) ? "zh-CN" : code;
     }
 
     // ---------------------------------------------------------------- DeepL
@@ -220,5 +260,22 @@ final class OnlineTranslator {
 
     private static String encode(String value) throws IOException {
         return URLEncoder.encode(value, StandardCharsets.UTF_8.name());
+    }
+
+    private static List<List<String>> chunkByChars(List<String> texts, int maxChars) {
+        List<List<String>> chunks = new ArrayList<>();
+        List<String> current = new ArrayList<>();
+        int size = 0;
+        for (String text : texts) {
+            if (!current.isEmpty() && size + text.length() > maxChars) {
+                chunks.add(current);
+                current = new ArrayList<>();
+                size = 0;
+            }
+            current.add(text);
+            size += text.length() + 1;
+        }
+        if (!current.isEmpty()) chunks.add(current);
+        return chunks;
     }
 }

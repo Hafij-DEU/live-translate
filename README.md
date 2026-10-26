@@ -29,7 +29,7 @@ and paints the translation over the original, in the page's own colours.
 | 🫧 **One tap, any app** | A floating bubble, a Quick Settings tile and a notification button all translate the current screen. |
 | 🎨 **In-place overlay** | Each translation sits exactly over the text it replaces, on the same background colour, with readable contrast. |
 | 🔒 **Private by default** | Text recognition and the default translator run on the phone. Nothing leaves the device unless you pick an online engine. |
-| 🧠 **Three engines** | Offline ML Kit (default), DeepL or Gemini AI (your own key), with automatic fallback to offline if an online engine fails. |
+| 🧠 **Four engines** | Offline ML Kit (default), Google Translate, DeepL or Gemini AI, with automatic fallback to offline if an online engine fails. |
 | 🔎 **Auto-detect** | Detects the screen's language from its main text, ignoring short buttons and labels. |
 | 🚫 **No catch** | No ads, no tracking, no accounts, no in-app purchases. |
 
@@ -94,6 +94,7 @@ Choose one under **Translation engine** in the app.
 | Engine | Quality | Speed | Needs internet | Needs a key | Cost |
 |---|:---:|:---:|:---:|:---:|---|
 | **Offline (ML Kit)** | ★★☆☆ | ⚡ Fast | Only for language packs | — | Free |
+| **Google Translate** | ★★★☆ | ⚡ Fast | ✓ | — | Free (unofficial endpoint) |
 | **DeepL** | ★★★★ | ⚡ Fast | ✓ | ✓ | Free tier: 500,000 characters/month |
 | **Gemini AI** | ★★★★ | A few seconds | ✓ | ✓ | Free tier available |
 
@@ -108,6 +109,14 @@ Translation runs entirely on the phone with Google ML Kit's on-device models. No
 Each language other than English needs a ~30 MB language pack. Packs download automatically the first time a language is used, or ahead of time with **Download offline language packs**. After that, translation works with no connection at all.
 
 The models are compact, so translations can be literal or occasionally wrong.
+</details>
+
+<details>
+<summary><b>Google Translate</b>: no setup</summary>
+
+Uses Google Translate's public web endpoint (the one used by Google's Chrome extension). No key or account is needed.
+
+The endpoint is unofficial, so Google may rate-limit or change it without notice. ScreenLingo falls back to offline when that happens.
 </details>
 
 <details>
@@ -184,7 +193,7 @@ ScreenLingo does **not** use accessibility services, does **not** read your noti
 
 - **Screenshots never leave the phone.** Each capture is processed in memory for text recognition and then discarded; nothing is saved.
 - **Offline engine:** nothing is sent anywhere.
-- **Online engines:** only the *recognised text* is sent, to the provider you chose (DeepL or Google Gemini), under that provider's terms.
+- **Online engines:** only the *recognised text* is sent, to the provider you chose (Google, DeepL or Google Gemini), under that provider's terms.
 - No analytics, no ads, no accounts, no ScreenLingo servers.
 
 > [!WARNING]
@@ -202,7 +211,7 @@ flowchart TD
     F --> G[ML Kit language ID<br/>longest blocks only]
     G --> H{Engine}
     H -->|Offline| I[ML Kit translator]
-    H -->|Online| J[DeepL / Gemini]
+    H -->|Online| J[Google / DeepL / Gemini]
     J -. on error .-> I
     I --> K[Overlay: one box per segment<br/>at the original position]
     J --> K
@@ -292,7 +301,7 @@ app/src/main/java/com/hafij/screenlingo/
 ├── Ocr.java                 ML Kit text recognisers per script
 ├── Segments.java            Turns OCR blocks into clean translation units
 ├── TranslateEngine.java     Offline ML Kit translation and language identification
-├── OnlineTranslator.java    DeepL and Gemini clients
+├── OnlineTranslator.java    Google, DeepL and Gemini clients
 ├── ResultView.java          Draws translations over the original text
 ├── Languages.java           Language list, display names, OCR script hints
 └── Prefs.java               Settings storage
@@ -355,6 +364,7 @@ Enable **Settings → Additional settings → Developer options → Install via 
 - OCR covers the Latin, Chinese, Devanagari, Japanese and Korean scripts only.
 - Very small, stylised or low-contrast text may be misread; Gemini corrects many of these errors.
 - The overlay is a snapshot and doesn't follow scrolling. Close it and translate again.
+- The Google engine relies on an unofficial endpoint that may stop working without notice.
 - Moving content, such as video, can shift between capture and display.
 
 ## License and privacy
