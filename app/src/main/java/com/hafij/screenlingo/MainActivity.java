@@ -1,130 +1,138 @@
 package com.hafij.screenlingo;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.text.util.Linkify;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.EditText;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.Spinner;
 import android.widget.TextView;
 
-import com.google.android.gms.tasks.Task;
-import com.google.android.gms.tasks.Tasks;
-import com.google.mlkit.common.model.DownloadConditions;
 import com.google.mlkit.common.model.RemoteModelManager;
-import com.google.mlkit.nl.translate.TranslateLanguage;
 import com.google.mlkit.nl.translate.TranslateRemoteModel;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntConsumer;
 
-/** Settings screen: language pair, OCR script, start/stop and offline pack download. */
+/** Home screen: start/stop, language pair, engine, OCR script, and links to packs and Settings. */
 public class MainActivity extends Activity {
     private TextView status;
+    private View statusDot;
+    private View start;
+    private View stop;
+    private Spinner source;
+    private Spinner target;
     private Spinner script;
-    private EditText deeplKey;
-    private EditText geminiKey;
-    private EditText geminiModel;
+    private View swap;
     private TextView engineNote;
+    private TextView keyLink;
+    private TextView packsCount;
+    private List<String> sources;
+    private List<String> targets;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(R.layout.activity_main);
+        EdgeToEdge.apply(this, findViewById(R.id.root), findViewById(R.id.header), findViewById(R.id.content));
         status = findViewById(R.id.status);
+        statusDot = findViewById(R.id.status_dot);
+        start = findViewById(R.id.start);
+        stop = findViewById(R.id.stop);
+        source = findViewById(R.id.source);
+        target = findViewById(R.id.target);
         script = findViewById(R.id.script);
+        swap = findViewById(R.id.swap);
+        packsCount = findViewById(R.id.packs_count);
 
-        List<String> targets = Languages.all();
-        List<String> sources = new ArrayList<>();
+        targets = Languages.all();
+        sources = new ArrayList<>();
         sources.add(Prefs.AUTO);
         sources.addAll(targets);
 
-        bind(findViewById(R.id.source), names(sources), sources.indexOf(Prefs.source(this)), i -> {
+        bind(source, names(sources), sources.indexOf(Prefs.source(this)), i -> {
             String code = sources.get(i);
             Prefs.setSource(this, code);
             String hint = Languages.scriptFor(code);
             if (hint != null) script.setSelection(Ocr.indexOf(hint));
+            updateSwap();
         });
-        bind(findViewById(R.id.target), names(targets), targets.indexOf(Prefs.target(this)),
+        bind(target, names(targets), targets.indexOf(Prefs.target(this)),
                 i -> Prefs.setTarget(this, targets.get(i)));
         bind(script, Ocr.NAMES, Ocr.indexOf(Prefs.script(this)),
                 i -> Prefs.setScript(this, Ocr.SCRIPTS[i]));
+        swap.setOnClickListener(v -> swapLanguages());
+        updateSwap();
 
-        deeplKey = findViewById(R.id.deepl_key);
-        geminiKey = findViewById(R.id.gemini_key);
-        geminiModel = findViewById(R.id.gemini_model);
         engineNote = findViewById(R.id.engine_note);
-        deeplKey.setText(Prefs.deeplKey(this));
-        geminiKey.setText(Prefs.geminiKey(this));
-        geminiModel.setText(Prefs.geminiModel(this));
-        bind(findViewById(R.id.engine), OnlineTranslator.NAMES, OnlineTranslator.indexOf(Prefs.engine(this)), i -> {
-            Prefs.setEngine(this, OnlineTranslator.ENGINES[i]);
-            showEngineFields(OnlineTranslator.ENGINES[i]);
-        });
+        keyLink = findViewById(R.id.key_link);
+        keyLink.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
+        buildEngineChips();
         showEngineFields(Prefs.engine(this));
 
-        findViewById(R.id.start).setOnClickListener(v ->
-                startActivity(new Intent(this, ProjectionActivity.class)));
-        findViewById(R.id.stop).setOnClickListener(v -> {
+        start.setOnClickListener(v -> startActivity(new Intent(this, ProjectionActivity.class)));
+        stop.setOnClickListener(v -> {
             if (TranslateService.instance() != null) {
                 startService(new Intent(this, TranslateService.class).setAction(TranslateService.ACTION_STOP));
             }
             status.postDelayed(this::updateStatus, 300);
         });
-        findViewById(R.id.download).setOnClickListener(v -> downloadModels());
-        findViewById(R.id.about).setOnClickListener(v -> showAbout());
+        findViewById(R.id.packs).setOnClickListener(v -> startActivity(new Intent(this, PacksActivity.class)));
+        findViewById(R.id.settings).setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
     }
 
-    private void showAbout() {
-        String version = "";
-        try {
-            version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-        } catch (Exception ignored) {
+    private void buildEngineChips() {
+        RadioGroup group = findViewById(R.id.engine);
+        LayoutInflater inflater = getLayoutInflater();
+        String current = Prefs.engine(this);
+        for (int i = 0; i < OnlineTranslator.ENGINES.length; i++) {
+            String engine = OnlineTranslator.ENGINES[i];
+            RadioButton chip = (RadioButton) inflater.inflate(R.layout.item_engine_chip, group, false);
+            chip.setId(View.generateViewId());
+            chip.setText(OnlineTranslator.SHORT_NAMES[i]);
+            chip.setContentDescription(OnlineTranslator.NAMES[i]);
+            chip.setTag(engine);
+            group.addView(chip);
+            if (engine.equals(current)) chip.setChecked(true);
         }
-        TextView body = new TextView(this);
-        body.setText(getString(R.string.about_body));
-        body.setAutoLinkMask(Linkify.WEB_URLS);
-        body.setTextSize(15);
-        body.setPadding(64, 24, 64, 0);
-        new AlertDialog.Builder(this)
-                .setTitle(getString(R.string.app_name) + " " + getString(R.string.about_version, version))
-                .setView(body)
-                .setPositiveButton(android.R.string.ok, null)
-                .setNeutralButton(R.string.licenses, (d, w) -> showLicenses())
-                .show();
+        group.setOnCheckedChangeListener((g, id) -> {
+            String engine = (String) g.findViewById(id).getTag();
+            Prefs.setEngine(this, engine);
+            showEngineFields(engine);
+        });
     }
 
-    private void showLicenses() {
-        TextView body = new TextView(this);
-        body.setText(getString(R.string.licenses_body));
-        body.setAutoLinkMask(Linkify.WEB_URLS);
-        body.setTextSize(15);
-        body.setPadding(64, 24, 64, 0);
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.licenses)
-                .setView(body)
-                .setPositiveButton(android.R.string.ok, null)
-                .show();
+    private void swapLanguages() {
+        String from = Prefs.source(this);
+        String to = Prefs.target(this);
+        if (Prefs.AUTO.equals(from)) return;
+        swap.animate().rotationBy(180).setDuration(250).start();
+        source.setSelection(sources.indexOf(to));
+        target.setSelection(targets.indexOf(from));
     }
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        Prefs.setKeys(this, deeplKey.getText().toString(), geminiKey.getText().toString(),
-                geminiModel.getText().toString());
+    private void updateSwap() {
+        boolean enabled = !Prefs.AUTO.equals(Prefs.source(this));
+        swap.setEnabled(enabled);
+        swap.setAlpha(enabled ? 1f : 0.4f);
     }
 
     private void showEngineFields(String engine) {
-        deeplKey.setVisibility(OnlineTranslator.DEEPL.equals(engine) ? View.VISIBLE : View.GONE);
+        boolean deepl = OnlineTranslator.DEEPL.equals(engine);
         boolean gemini = OnlineTranslator.GEMINI.equals(engine);
-        geminiKey.setVisibility(gemini ? View.VISIBLE : View.GONE);
-        geminiModel.setVisibility(gemini ? View.VISIBLE : View.GONE);
+        keyLink.setVisibility(deepl || gemini ? View.VISIBLE : View.GONE);
+        if (deepl || gemini) {
+            String name = getString(deepl ? R.string.label_deepl_key : R.string.label_gemini_key);
+            boolean saved = !(deepl ? Prefs.deeplKey(this) : Prefs.geminiKey(this)).isEmpty();
+            keyLink.setText(getString(saved ? R.string.key_ready : R.string.key_add, name) + "  \u203A");
+        }
         switch (engine) {
             case OnlineTranslator.GOOGLE:
                 engineNote.setText(R.string.note_google);
@@ -144,34 +152,30 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         updateStatus();
+        showEngineFields(Prefs.engine(this));
+        // The service starts a moment after the capture dialog closes.
+        status.postDelayed(this::updateStatus, 800);
+        RemoteModelManager.getInstance().getDownloadedModels(TranslateRemoteModel.class)
+                .addOnSuccessListener(models -> packsCount.setText(
+                        getString(R.string.packs_count, PacksActivity.codes(models).size())));
     }
 
     private void updateStatus() {
-        if (TranslateService.instance() != null) {
+        boolean running = TranslateService.instance() != null;
+        int dot;
+        if (running) {
             status.setText(R.string.status_on);
+            dot = getColor(R.color.ok);
         } else if (!Settings.canDrawOverlays(this)) {
-            status.setText(R.string.need_overlay);
+            status.setText(R.string.need_overlay_short);
+            dot = getColor(R.color.warn);
         } else {
             status.setText(R.string.status_off);
+            dot = 0x99FFFFFF;
         }
-    }
-
-    private void downloadModels() {
-        List<String> codes = new ArrayList<>();
-        codes.add(Prefs.target(this));
-        String source = Prefs.source(this);
-        if (!Prefs.AUTO.equals(source)) codes.add(source);
-        RemoteModelManager models = RemoteModelManager.getInstance();
-        DownloadConditions conditions = new DownloadConditions.Builder().build();
-        List<Task<Void>> downloads = new ArrayList<>();
-        for (String code : codes) {
-            if (TranslateLanguage.ENGLISH.equals(code)) continue; // built in
-            downloads.add(models.download(new TranslateRemoteModel.Builder(code).build(), conditions));
-        }
-        status.setText(R.string.downloading);
-        Tasks.whenAll(downloads)
-                .addOnSuccessListener(v -> status.setText(R.string.downloaded))
-                .addOnFailureListener(e -> status.setText(getString(R.string.download_failed, e.getMessage())));
+        statusDot.setBackgroundTintList(ColorStateList.valueOf(dot));
+        start.setVisibility(running ? View.GONE : View.VISIBLE);
+        stop.setVisibility(running ? View.VISIBLE : View.GONE);
     }
 
     private static String[] names(List<String> codes) {
@@ -181,8 +185,8 @@ public class MainActivity extends Activity {
     }
 
     private void bind(Spinner spinner, String[] labels, int selected, IntConsumer onSelect) {
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, R.layout.spinner_item, labels);
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown);
         spinner.setAdapter(adapter);
         spinner.setSelection(Math.max(0, selected), false);
         spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {

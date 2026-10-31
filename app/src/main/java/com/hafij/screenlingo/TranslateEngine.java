@@ -3,12 +3,14 @@ package com.hafij.screenlingo;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
 import com.google.mlkit.common.model.DownloadConditions;
+import com.google.mlkit.common.model.RemoteModelManager;
 import android.util.Log;
 
 import com.google.mlkit.nl.languageid.LanguageIdentification;
 import com.google.mlkit.nl.languageid.LanguageIdentificationOptions;
 import com.google.mlkit.nl.languageid.LanguageIdentifier;
 import com.google.mlkit.nl.translate.TranslateLanguage;
+import com.google.mlkit.nl.translate.TranslateRemoteModel;
 import com.google.mlkit.nl.translate.Translation;
 import com.google.mlkit.nl.translate.Translator;
 import com.google.mlkit.nl.translate.TranslatorOptions;
@@ -58,6 +60,20 @@ final class TranslateEngine {
                     for (String text : texts) parts.add(translator.translate(text));
                     return Tasks.<String>whenAllSuccess(parts);
                 });
+    }
+
+    /** Loads language-id and, when its packs are on the phone, the likely translator. */
+    void warmUp(String source, String target) {
+        identifier.identifyLanguage("Hello, how are you today?");
+        if (source == null || Prefs.AUTO.equals(source) || source.equals(target)) return;
+        RemoteModelManager models = RemoteModelManager.getInstance();
+        Task<Boolean> from = models.isModelDownloaded(new TranslateRemoteModel.Builder(source).build());
+        Task<Boolean> to = models.isModelDownloaded(new TranslateRemoteModel.Builder(target).build());
+        Tasks.whenAllSuccess(from, to).addOnSuccessListener(ready -> {
+            if (Boolean.TRUE.equals(ready.get(0)) && Boolean.TRUE.equals(ready.get(1))) {
+                translator(source, target).translate("Hello");
+            }
+        });
     }
 
     private Translator translator(String source, String target) {

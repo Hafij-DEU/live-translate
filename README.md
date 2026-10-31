@@ -124,7 +124,7 @@ The endpoint is unofficial, so Google may rate-limit or change it without notice
 
 1. Create a free account at <https://www.deepl.com/pro-api>.
 2. Copy your **Authentication Key**.
-3. Paste it into **DeepL API key** in ScreenLingo.
+3. In ScreenLingo, open **Settings**, paste it into **DeepL** and tap **Save**.
 
 Free keys end in `:fx` and use DeepL's free API; other keys use the Pro API automatically. DeepL supports fewer target languages than ML Kit; unsupported ones fall back to offline.
 </details>
@@ -135,12 +135,12 @@ Free keys end in `:fx` and use DeepL's free API; other keys use the Pro API auto
 Gemini receives every text block on the screen at once, so it translates with full context, picks the right meaning for single words, and quietly fixes OCR mistakes.
 
 1. Get a free API key at <https://aistudio.google.com/apikey>.
-2. Paste it into **Gemini API key** in ScreenLingo.
+2. In ScreenLingo, open **Settings**, paste it into **Gemini** and tap **Save**.
 3. *(Optional)* Set **Gemini model**. The default is `gemini-flash-latest`; any Gemini API model name works, for example `gemini-2.5-flash`.
 </details>
 
 > [!NOTE]
-> API keys are stored only in the app's private storage and are excluded from Android backups.
+> API keys are encrypted with a key held in the Android Keystore (AES-256-GCM), stored only in the app's private storage and excluded from Android backups. **Clear** in Settings removes them.
 
 ## Language support
 
@@ -294,7 +294,9 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 ```text
 app/src/main/java/com/hafij/screenlingo/
-├── MainActivity.java        Settings: languages, script, engine, API keys
+├── MainActivity.java        Home: languages, script, engine
+├── SettingsActivity.java    API keys and About
+├── PacksActivity.java       Download and remove offline language packs
 ├── ProjectionActivity.java  Invisible trampoline for overlay, notification and capture consent
 ├── TranslateService.java    Foreground service: capture, OCR, translation, bubble, overlay
 ├── QuickTile.java           Quick Settings tile
@@ -304,6 +306,8 @@ app/src/main/java/com/hafij/screenlingo/
 ├── OnlineTranslator.java    Google, DeepL and Gemini clients
 ├── ResultView.java          Draws translations over the original text
 ├── Languages.java           Language list, display names, OCR script hints
+├── KeyVault.java            Android Keystore encryption for API keys
+├── EdgeToEdge.java          System bar insets
 └── Prefs.java               Settings storage
 ```
 

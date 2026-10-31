@@ -1,4 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand">#1565C0</color>
+    <color name="brand">#5B3DF5</color>
+
+    <!-- Hero gradient: violet to blue to teal. -->
+    <color name="grad_start">#7B2FF7</color>
+    <color name="grad_mid">#3D6BFF</color>
+    <color name="grad_end">#00C2C7</color>
+
+    <color name="page">#F5F3FC</color>
+    <color name="card">#FFFFFF</color>
+    <color name="field">#F0EDFA</color>
+    <color name="field_stroke">#E1DCF3</color>
+    <color name="text_primary">#1A1530</color>
+    <color name="text_secondary">#6B6584</color>
+    <color name="accent">#5B3DF5</color>
+    <color name="on_accent">#FFFFFF</color>
+    <color name="ok">#22C55E</color>
+    <color name="warn">#F59E0B</color>
+    <color name="danger">#EF4444</color>
+
+    <!-- Tile and language-avatar palette. -->
+    <color name="c_violet">#7C3AED</color>
+    <color name="c_blue">#2563EB</color>
+    <color name="c_teal">#0D9488</color>
+    <color name="c_green">#16A34A</color>
+    <color name="c_amber">#D97706</color>
+    <color name="c_orange">#EA580C</color>
+    <color name="c_pink">#DB2777</color>
+    <color name="c_red">#DC2626</color>
+
+    <color name="tint_violet">#EDE7FE</color>
+    <color name="tint_blue">#E0EAFF</color>
+    <color name="tint_teal">#D9F5F2</color>
+    <color name="tint_pink">#FCE4F1</color>
 </resources>

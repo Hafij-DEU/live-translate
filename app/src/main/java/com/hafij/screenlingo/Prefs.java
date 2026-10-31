@@ -52,11 +52,27 @@ final class Prefs {
     }
 
     static String deeplKey(Context c) {
-        return store(c).getString("deepl_key", "").trim();
+        return secret(c, "deepl_key");
     }
 
     static String geminiKey(Context c) {
-        return store(c).getString("gemini_key", "").trim();
+        return secret(c, "gemini_key");
+    }
+
+    /** API keys are kept sealed by {@link KeyVault}; a plain value saved by 0.2.x is sealed on first read. */
+    private static String secret(Context c, String name) {
+        SharedPreferences s = store(c);
+        String legacy = s.getString(name, null);
+        if (legacy != null) {
+            String sealed = KeyVault.seal(legacy.trim());
+            if (sealed != null) s.edit().putString(name + "_sealed", sealed).remove(name).apply();
+            return legacy.trim();
+        }
+        return KeyVault.open(s.getString(name + "_sealed", null)).trim();
+    }
+
+    static boolean hasKeys(Context c) {
+        return !deeplKey(c).isEmpty() || !geminiKey(c).isEmpty();
     }
 
     static String geminiModel(Context c) {
@@ -64,12 +80,35 @@ final class Prefs {
         return model.isEmpty() ? DEFAULT_GEMINI_MODEL : model;
     }
 
-    static void setKeys(Context c, String deeplKey, String geminiKey, String geminiModel) {
-        store(c).edit()
-                .putString("deepl_key", deeplKey.trim())
-                .putString("gemini_key", geminiKey.trim())
+    /** Seals and saves the keys. Returns false if the Keystore refused; a key is never written in plain text. */
+    static boolean setKeys(Context c, String deeplKey, String geminiKey, String geminiModel) {
+        String deepl = KeyVault.seal(deeplKey.trim());
+        String gemini = KeyVault.seal(geminiKey.trim());
+        SharedPreferences.Editor edit = store(c).edit()
                 .putString("gemini_model", geminiModel.trim())
-                .apply();
+                .remove("deepl_key")
+                .remove("gemini_key");
+        if (deepl != null) edit.putString("deepl_key_sealed", deepl);
+        if (gemini != null) edit.putString("gemini_key_sealed", gemini);
+        edit.apply();
+        return deepl != null && gemini != null;
+    }
+
+    static boolean wifiOnly(Context c) {
+        return store(c).getBoolean("wifi_only", false);
+    }
+
+    static void setWifiOnly(Context c, boolean on) {
+        store(c).edit().putBoolean("wifi_only", on).apply();
+    }
+
+    /** The language auto-detect found last time, used to warm up its translator. */
+    static String lastSource(Context c) {
+        return store(c).getString("last_source", null);
+    }
+
+    static void setLastSource(Context c, String code) {
+        store(c).edit().putString("last_source", code).apply();
     }
 
     static int bubbleX(Context c, int fallback) {

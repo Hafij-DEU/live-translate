@@ -46,8 +46,13 @@ import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 /**
  * Foreground service that owns the screen capture session, the floating bubble and the
@@ -63,6 +68,12 @@ public class TranslateService extends Service {
     private static final String CHANNEL = "capture";
     private static final int NOTIFICATION_ID = 1;
     private static final long HIDE_BUBBLE_MS = 250;
+    // A clean frame is the newest one once the screen has been still this long after hiding the bubble.
+    private static final long QUIET_MS = 45;
+    // On a moving screen, the third frame after hiding is drawn without the bubble.
+    private static final int MOVING_FRAMES = 3;
+    private static final long FRAME_TIMEOUT_MS = 300;
+    private static final int CACHE_SIZE = 600;
     private static final String TAG = "ScreenLingo";
 
     private static WeakReference<TranslateService> current = new WeakReference<>(null);
@@ -86,6 +97,18 @@ public class TranslateService extends Service {
     private VirtualDisplay display;
     private volatile ImageReader reader;
     private Image latest; // capture thread only
+    private final AtomicBoolean waitingForFrame = new AtomicBoolean();
+    private int freshFrames; // capture thread only
+    private final Runnable quietFrame = this::takeFrame;
+    private final Runnable frameTimeout = this::takeFrame;
+
+    // Translations already shown, keyed by engine, language pair and text; rescans reuse them.
+    private final Map<String, String> memory = new LinkedHashMap<>(256, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+            return size() > CACHE_SIZE;
+        }
+    };
 
     private ImageView bubble;
     private WindowManager.LayoutParams bubbleParams;
@@ -155,6 +178,16 @@ public class TranslateService extends Service {
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.getSurface(), null, capture);
         showBubble();
         QuickTile.refresh(this);
+        warmUp();
+    }
+
+    /** Loads the OCR, language-id and translation models now so the first tap is fast. */
+    private void warmUp() {
+        Bitmap blank = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
+        recognizer().process(InputImage.fromBitmap(blank, 0)).addOnCompleteListener(t -> blank.recycle());
+        String source = Prefs.source(this);
+        if (Prefs.AUTO.equals(source)) source = Prefs.lastSource(this);
+        engine.warmUp(source, Prefs.target(this));
     }
 
     // ---------------------------------------------------------------- capture
@@ -180,15 +213,46 @@ public class TranslateService extends Service {
         }
         if (latest != null) latest.close();
         latest = image;
+        if (waitingForFrame.get()) {
+            freshFrames++;
+            if (freshFrames >= MOVING_FRAMES) {
+                takeFrame();
+            } else {
+                capture.removeCallbacks(quietFrame);
+                capture.postDelayed(quietFrame, QUIET_MS);
+            }
+        }
+    }
+
+    /** Capture thread: uses the newest frame for the pending capture, once. */
+    private void takeFrame() {
+        if (!waitingForFrame.compareAndSet(true, false)) return;
+        capture.removeCallbacks(quietFrame);
+        capture.removeCallbacks(frameTimeout);
+        grabFrame(true);
     }
 
     /** Hides the bubble and overlay, waits for a clean frame, then reads and translates it. */
     void captureScreen(long extraDelayMs) {
         if (busy || projection == null) return;
         busy = true;
-        dismissResult();
-        if (bubble != null) bubble.setVisibility(View.INVISIBLE);
-        main.postDelayed(() -> capture.post(() -> grabFrame(true)), HIDE_BUBBLE_MS + extraDelayMs);
+        if (extraDelayMs > 0) {
+            // From the notification: wait for the shade to finish collapsing.
+            dismissResult();
+            if (bubble != null) bubble.setVisibility(View.INVISIBLE);
+            main.postDelayed(() -> capture.post(() -> grabFrame(true)), HIDE_BUBBLE_MS + extraDelayMs);
+            return;
+        }
+        // Take the first frame drawn without the bubble instead of waiting a fixed time.
+        capture.post(() -> {
+            freshFrames = 0;
+            waitingForFrame.set(true);
+            capture.postDelayed(frameTimeout, FRAME_TIMEOUT_MS);
+            main.post(() -> {
+                dismissResult();
+                if (bubble != null) bubble.setVisibility(View.INVISIBLE);
+            });
+        });
     }
 
     private void grabFrame(boolean allowResize) {
@@ -244,15 +308,19 @@ public class TranslateService extends Service {
 
     // ---------------------------------------------------------------- OCR + translation
 
-    private void recognize(Bitmap bitmap) {
+    private TextRecognizer recognizer() {
         String script = Prefs.script(this);
         if (recognizer == null || !script.equals(recognizerScript)) {
             if (recognizer != null) recognizer.close();
             recognizer = Ocr.create(script);
             recognizerScript = script;
         }
+        return recognizer;
+    }
+
+    private void recognize(Bitmap bitmap) {
         main.postDelayed(slowHint, 4000);
-        recognizer.process(InputImage.fromBitmap(bitmap, 0))
+        recognizer().process(InputImage.fromBitmap(bitmap, 0))
                 .addOnSuccessListener(text -> translate(text, bitmap))
                 .addOnFailureListener(e -> {
                     bitmap.recycle();
@@ -276,35 +344,56 @@ public class TranslateService extends Service {
             return;
         }
         String engineId = Prefs.engine(this);
-        String source = Prefs.source(this);
         String target = Prefs.target(this);
-        Task<List<String>> work;
-        if (OnlineTranslator.OFFLINE.equals(engineId)) {
-            work = translateOffline(source, target, texts);
-        } else {
-            // Detect once for the whole screen: per-block detection online misreads short labels.
-            work = engine.resolveSource(source, texts)
-                    .continueWithTask(detected -> OnlineTranslator.translate(this, engineId,
-                            detected.isSuccessful() ? detected.getResult() : null, target, texts))
+        // Detect once for the whole screen: per-block detection misreads short labels.
+        Task<List<String>> work = engine.resolveSource(Prefs.source(this), texts).continueWithTask(detected -> {
+            String resolved = detected.isSuccessful() ? detected.getResult() : null;
+            if (resolved != null && !resolved.equals(Prefs.lastSource(this))) Prefs.setLastSource(this, resolved);
+            if (OnlineTranslator.OFFLINE.equals(engineId)) return translateOffline(resolved, target, texts);
+            return cached(engineId + '|' + resolved + '|' + target, texts,
+                    missing -> OnlineTranslator.translate(this, engineId, resolved, target, missing))
                     .continueWithTask(task -> {
                         if (task.isSuccessful()) return task;
                         Exception e = task.getException();
                         Log.w(TAG, "online translation failed, using offline", e);
                         toast(getString(R.string.online_failed, e != null ? e.getMessage() : ""));
-                        return translateOffline(source, target, texts);
+                        return translateOffline(resolved, target, texts);
                     });
-        }
+        });
         work.addOnSuccessListener(translated -> showResult(segments, backgrounds, translated))
                 .addOnFailureListener(e -> fail(e.getMessage()));
     }
 
-    private Task<List<String>> translateOffline(String source, String target, List<String> texts) {
-        return engine.resolveSource(source, texts).onSuccessTask(resolved -> {
-            if (resolved == null) {
-                return Tasks.forException(new IllegalStateException(getString(R.string.no_language)));
+    private Task<List<String>> translateOffline(String resolved, String target, List<String> texts) {
+        if (resolved == null) {
+            return Tasks.forException(new IllegalStateException(getString(R.string.no_language)));
+        }
+        if (resolved.equals(target)) return Tasks.forResult(texts);
+        return cached(OnlineTranslator.OFFLINE + '|' + resolved + '|' + target, texts,
+                missing -> engine.translate(resolved, target, missing));
+    }
+
+    /** Translates only the texts not already in {@link #memory}; runs on the main thread. */
+    private Task<List<String>> cached(String pair, List<String> texts,
+                                      Function<List<String>, Task<List<String>>> fetch) {
+        Set<String> unique = new LinkedHashSet<>();
+        for (String text : texts) {
+            if (!memory.containsKey(pair + '\n' + text)) unique.add(text);
+        }
+        List<String> missing = new ArrayList<>(unique);
+        Task<List<String>> fetched = missing.isEmpty() ? Tasks.forResult(missing) : fetch.apply(missing);
+        return fetched.onSuccessTask(done -> {
+            Map<String, String> fresh = new HashMap<>();
+            for (int i = 0; i < missing.size(); i++) {
+                fresh.put(missing.get(i), done.get(i));
+                memory.put(pair + '\n' + missing.get(i), done.get(i));
             }
-            if (resolved.equals(target)) return Tasks.forResult(texts);
-            return engine.translate(resolved, target, texts);
+            List<String> out = new ArrayList<>(texts.size());
+            for (String text : texts) {
+                String translated = fresh.get(text);
+                out.add(translated != null ? translated : memory.get(pair + '\n' + text));
+            }
+            return Tasks.forResult(out);
         });
     }
 
@@ -508,6 +597,7 @@ public class TranslateService extends Service {
     public void onDestroy() {
         current = new WeakReference<>(null);
         main.removeCallbacksAndMessages(null);
+        waitingForFrame.set(false);
         if (result != null) {
             windows.removeView(result);
             result = null;

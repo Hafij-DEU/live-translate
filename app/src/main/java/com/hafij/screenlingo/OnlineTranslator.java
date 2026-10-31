@@ -42,6 +42,7 @@ final class OnlineTranslator {
             "DeepL (online, API key)",
             "Gemini AI (online, API key, most accurate)",
     };
+    static final String[] SHORT_NAMES = {"Offline", "Google", "DeepL", "Gemini"};
 
     private static final ExecutorService NETWORK = Executors.newSingleThreadExecutor();
     private static final int GOOGLE_CHUNK_CHARS = 4000;
