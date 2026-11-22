@@ -10,6 +10,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.net.Uri;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
@@ -25,6 +26,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
+import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
@@ -67,6 +69,7 @@ public class TranslateService extends Service {
 
     private static final String CHANNEL = "capture";
     private static final int NOTIFICATION_ID = 1;
+    private static final int OVERLAY_NOTIFICATION_ID = 2;
     private static final long HIDE_BUBBLE_MS = 250;
     // A clean frame is the newest one once the screen has been still this long after hiding the bubble.
     private static final long QUIET_MS = 45;
@@ -258,7 +261,11 @@ public class TranslateService extends Service {
     private void grabFrame(boolean allowResize) {
         Rect bounds = screenBounds();
         ImageReader r = reader;
-        if (r == null) return;
+        if (r == null) {
+            // Session is tearing down; release the capture lock so the bubble is not stuck.
+            main.post(() -> fail(null));
+            return;
+        }
         if (allowResize && (bounds.width() != r.getWidth() || bounds.height() != r.getHeight())) {
             // Rotated since the session started: point the display at a correctly sized surface.
             reader = newReader(bounds.width(), bounds.height());
@@ -399,10 +406,13 @@ public class TranslateService extends Service {
 
     /** The most common colour just outside the box, which is the surface the text sits on. */
     private static int backgroundAround(Bitmap bitmap, Rect box) {
-        int left = Math.max(0, box.left - 2);
-        int top = Math.max(0, box.top - 2);
-        int right = Math.min(bitmap.getWidth() - 1, box.right + 2);
-        int bottom = Math.min(bitmap.getHeight() - 1, box.bottom + 2);
+        int maxX = bitmap.getWidth() - 1;
+        int maxY = bitmap.getHeight() - 1;
+        // Clamp both sides: OCR boxes can lie partly or wholly outside the frame.
+        int left = clamp(box.left - 2, 0, maxX);
+        int top = clamp(box.top - 2, 0, maxY);
+        int right = clamp(box.right + 2, 0, maxX);
+        int bottom = clamp(box.bottom + 2, 0, maxY);
         Map<Integer, Integer> votes = new HashMap<>();
         int best = 0xFFFFFFFF;
         int bestVotes = 0;
@@ -422,6 +432,10 @@ public class TranslateService extends Service {
             }
         }
         return best;
+    }
+
+    static int clamp(int v, int lo, int hi) {
+        return v < lo ? lo : Math.min(v, hi);
     }
 
     private void showResult(List<Segments.Segment> segments, List<Integer> backgrounds, List<String> translated) {
@@ -448,7 +462,45 @@ public class TranslateService extends Service {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                         | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
-        windows.addView(result, params);
+        if (!addOverlay(result, params)) result = null;
+    }
+
+    /**
+     * Adds an overlay window. When "display over other apps" was revoked mid-session the window
+     * manager throws instead of showing it; tell the user how to re-grant instead of crashing.
+     */
+    private boolean addOverlay(View view, WindowManager.LayoutParams params) {
+        if (Settings.canDrawOverlays(this)) {
+            try {
+                windows.addView(view, params);
+                return true;
+            } catch (RuntimeException e) {
+                Log.w("ScreenLingo", "overlay rejected", e);
+            }
+        }
+        overlayRevoked();
+        return false;
+    }
+
+    private void overlayRevoked() {
+        toast(getString(R.string.need_overlay_short));
+        PendingIntent grant = PendingIntent.getActivity(this, 3,
+                new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        Notification n = new Notification.Builder(this, CHANNEL)
+                .setSmallIcon(R.drawable.ic_glyph)
+                .setContentTitle(getString(R.string.need_overlay_short))
+                .setContentText(getString(R.string.need_overlay))
+                .setStyle(new Notification.BigTextStyle().bigText(getString(R.string.need_overlay)))
+                .setContentIntent(grant)
+                .setAutoCancel(true)
+                .build();
+        try {
+            getSystemService(NotificationManager.class).notify(OVERLAY_NOTIFICATION_ID, n);
+        } catch (RuntimeException e) {
+            Log.w("ScreenLingo", "overlay notice failed", e);
+        }
     }
 
     private void dismissResult() {
@@ -491,7 +543,7 @@ public class TranslateService extends Service {
         bubbleParams.x = Prefs.bubbleX(this, (int) (8 * density));
         bubbleParams.y = Prefs.bubbleY(this, (int) (220 * density));
         bubble.setOnTouchListener(new BubbleTouch(ViewConfiguration.get(ui).getScaledTouchSlop()));
-        windows.addView(bubble, bubbleParams);
+        if (!addOverlay(bubble, bubbleParams)) bubble = null;
     }
 
     private static WindowManager.LayoutParams overlayParams(int width, int height, int flags) {
